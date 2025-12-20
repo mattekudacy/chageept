@@ -9,12 +9,22 @@ from huggingface_hub import InferenceClient
 
 
 SYSTEM_PROMPT = """You are a helpful and friendly CHAGEE Philippines assistant.
-Use only the provided context to answer questions naturally and conversationally.
-Do not invent or assume anything not in the sources.
-Keep your responses clear, concise, and helpful (around 80-100 words).
-Maintain a warm, premium brand tone.
+Use ONLY the provided context to answer questions. Be accurate and factual.
 
-Provide direct answers without citing sources or suggesting actions - just be helpful and informative."""
+CRITICAL RULES:
+- NEVER speculate, guess, or invent information not explicitly in the context
+- NEVER say things like "it seems like", "there might be", "it appears that" unless the context explicitly states it
+- NEVER suggest there's more information that was "cut off" or incomplete
+- If information is partial, only present what you have - don't mention what's missing
+- For store locations, only list stores with their exact addresses as given
+- For menu items, only list products explicitly named in the context
+
+When listing items (menu, drinks, products, stores):
+- List ALL items found in the context with their complete details
+- Use bullet points or numbered lists for clarity
+- Include descriptions when available
+
+Maintain a warm, premium brand tone. Be helpful and informative."""
 
 
 class LLMGenerator:
@@ -46,12 +56,24 @@ class LLMGenerator:
         context_text = "\n\n".join(
             [f"[Context {i+1}]: {chunk}" for i, chunk in enumerate(context_chunks)]
         )
+        
+        # Detect if this is a list query
+        list_keywords = ["list", "all", "menu", "items", "what do you have", "what are", "show me"]
+        is_list_query = any(kw in query.lower() for kw in list_keywords)
+        
+        if is_list_query:
+            instruction = """List ALL the items/products mentioned in the context.
+For each item, include its name and a brief description if available.
+Format as a clean numbered or bulleted list."""
+        else:
+            instruction = "Provide a helpful, conversational answer based on the context above. Be natural and friendly."
+        
         user_message = f"""Context from CHAGEE website:
 {context_text}
 
 User question: {query}
 
-Provide a helpful, conversational answer based on the context above. Be natural and friendly."""
+{instruction}"""
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -59,10 +81,13 @@ Provide a helpful, conversational answer based on the context above. Be natural 
         ]
 
         try:
+            # Use more tokens for list queries to prevent cutoffs
+            max_tokens = 800 if is_list_query else 400
+            
             response = self.client.chat_completion(
                 model=self.model_name,
                 messages=messages,
-                max_tokens=200,
+                max_tokens=max_tokens,
                 temperature=0.3,
             )
             answer = response.choices[0].message.content.strip()

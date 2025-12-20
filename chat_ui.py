@@ -54,12 +54,24 @@ def initialize_tools():
 initialize_tools()
 
 
+def is_list_query(query: str) -> bool:
+    """Check if the query is asking for a list of items."""
+    list_keywords = ["list", "all", "menu", "items", "drinks", "what do you have", 
+                     "what are", "show me", "tell me about", "options", "available"]
+    query_lower = query.lower()
+    return any(kw in query_lower for kw in list_keywords)
+
+
 def process_query(query: str, candidate_urls: List[str] = None):
     """Process a query through the RAG pipeline."""
     candidate_urls = candidate_urls or []
     
+    # Use more results for list/menu queries
+    is_list = is_list_query(query)
+    top_k = 12 if is_list else 6  # Increased from 4
+    
     # Search vector DB
-    results = search_tool.search(query, top_k=4)
+    results = search_tool.search(query, top_k=top_k)
     used_scrape = False
     top_score = results[0].score if results else 0.0
     
@@ -76,20 +88,36 @@ def process_query(query: str, candidate_urls: List[str] = None):
                 continue
         if scraped_docs:
             search_tool.add_documents(scraped_docs)
-            results = search_tool.search(query, top_k=4)
+            results = search_tool.search(query, top_k=top_k)
             used_scrape = True
             top_score = results[0].score if results else 0.0
 
-    # Extract context and sources
-    context_chunks = [r.snippet for r in results[:3]]
+    # Extract context - use more chunks for list queries
+    num_context = 10 if is_list else 5
+    context_chunks = []
+    seen_texts = set()
+    for r in results[:num_context]:
+        # Deduplicate similar content
+        text_key = r.document.text[:100]
+        if text_key not in seen_texts:
+            # Use full text for better context - increased to prevent cutoffs
+            context_chunks.append(r.document.text[:1500])
+            seen_texts.add(text_key)
+    
+    # Extract unique sources (dedupe by URL, use cleaner title without part numbers)
     source_urls = []
     sources = []
-    seen = set()
-    for r in results[:2]:
-        if r.document.url not in seen:
-            sources.append({"title": r.document.title, "url": r.document.url})
-            source_urls.append(r.document.url)
-            seen.add(r.document.url)
+    seen_urls = set()
+    for r in results[:6]:
+        url = r.document.url
+        if url not in seen_urls:
+            # Get base title without part numbers for cleaner display
+            title = r.document.title
+            if " (Part " in title:
+                title = title.split(" (Part ")[0]
+            sources.append({"title": title, "url": url})
+            source_urls.append(url)
+            seen_urls.add(url)
 
     # Generate answer
     if context_chunks and top_score > 0.2:
