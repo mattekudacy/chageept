@@ -21,12 +21,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+# Make start script executable
+RUN chmod +x start.sh
+
 # Expose port
 EXPOSE 8000
 
-# Set default port (Railway overrides this with its own PORT)
-ENV PORT=8000
-ENV CHAINLIT_PORT=8000
-
-# Run Chainlit
-CMD ["sh", "-c", "chainlit run chat_ui.py --host 0.0.0.0 --port $PORT"]
+# Run via start script (properly handles PORT variable)
+CMD ["./start.sh"]
