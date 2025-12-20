@@ -24,5 +24,9 @@ COPY . .
 # Expose port
 EXPOSE 8000
 
-# Run Chainlit (use shell form for variable expansion)
-CMD chainlit run chat_ui.py --host 0.0.0.0 --port ${PORT:-8000}
+# Set default port (Railway overrides this with its own PORT)
+ENV PORT=8000
+ENV CHAINLIT_PORT=8000
+
+# Run Chainlit
+CMD ["sh", "-c", "chainlit run chat_ui.py --host 0.0.0.0 --port $PORT"]
