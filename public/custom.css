@@ -1,0 +1,106 @@
+/* Custom CSS for CHAGEEPT - ChatGPT Style */
+
+/* Wider centered chat container */
+#chat-container,
+.MuiContainer-root {
+    max-width: 800px !important;
+    margin: 0 auto !important;
+}
+
+/* Center the input area and make it wider */
+.MuiBox-root:has(#chat-input),
+footer {
+    max-width: 800px !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+}
+
+/* Style the input box to be more prominent */
+#chat-input {
+    border-radius: 24px !important;
+    padding: 14px 20px !important;
+    font-size: 16px !important;
+}
+
+/* Center the logo/welcome area */
+.MuiBox-root:has(.step),
+main > div {
+    max-width: 800px !important;
+    margin: 0 auto !important;
+}
+
+/* Make assistant avatar larger */
+.step-avatar img,
+.message-avatar img {
+    width: 80px !important;
+    height: 80px !important;
+    border-radius: 50% !important;
+    object-fit: cover !important;
+}
+
+/* Avatar container */
+.step-avatar,
+.message-avatar {
+    width: 80px !important;
+    height: 80px !important;
+}
+
+/* Center the starter prompts grid */
+.MuiGrid-root:has([class*="starter"]),
+div[class*="starters"] {
+    max-width: 800px !important;
+    margin: 0 auto !important;
+    justify-content: center !important;
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+}
+
+/* Style starter buttons to look like ChatGPT */
+[class*="starter"],
+button[class*="starter"] {
+    border-radius: 16px !important;
+    padding: 16px 20px !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    transition: all 0.2s ease !important;
+    text-align: left !important;
+    width: 100% !important;
+}
+
+[class*="starter"]:hover,
+button[class*="starter"]:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* Center everything in main chat area */
+.MuiStack-root > .MuiBox-root,
+main .MuiStack-root {
+    max-width: 800px !important;
+    margin: 0 auto !important;
+}
+
+/* Welcome logo centered and larger */
+.MuiBox-root img[src*="chageelogo"],
+img[name="chagee_logo"] {
+    display: block !important;
+    margin: 60px auto 40px !important;
+    max-width: 280px !important;
+    height: auto !important;
+}
+
+/* Center welcome message/elements */
+div[class*="welcome"],
+.step-start {
+    text-align: center !important;
+    max-width: 800px !important;
+    margin: 0 auto !important;
+}
+
+/* Adjust chat messages container */
+#messages-container {
+    max-width: 800px !important;
+    margin: 0 auto !important;
+}

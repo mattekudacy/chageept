@@ -1,0 +1,9 @@
+requests
+beautifulsoup4
+sentence-transformers
+chromadb
+python-dotenv
+transformers
+torch
+chainlit
+huggingface-hub>=0.34.0,<1.0
