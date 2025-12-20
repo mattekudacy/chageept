@@ -1,9 +1,13 @@
 requests
 beautifulsoup4
-sentence-transformers
 chromadb
 python-dotenv
-transformers
-torch
 chainlit
 huggingface-hub>=0.34.0,<1.0
+
+# CPU-only PyTorch (much smaller than full torch)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch --index-url https://download.pytorch.org/whl/cpu
+
+# Minimal transformers and sentence-transformers
+sentence-transformers
