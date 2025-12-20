@@ -24,5 +24,5 @@ COPY . .
 # Expose port
 EXPOSE 8000
 
-# Run Chainlit
-CMD ["chainlit", "run", "chat_ui.py", "--host", "0.0.0.0", "--port", "8000"]
+# Run Chainlit (use shell form for variable expansion)
+CMD chainlit run chat_ui.py --host 0.0.0.0 --port ${PORT:-8000}
