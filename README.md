@@ -79,6 +79,6 @@ chageept/
 
 Configured for Railway deployment with Docker. Just push to your repo and connect to Railway.
 
-*This is a personal project and is not affiliated with CHAGEE.*
-
 ---
+
+*This is a personal project and is not affiliated with CHAGEE.*
