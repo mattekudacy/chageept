@@ -3,12 +3,22 @@
     // Update favicon - remove any existing icon links first (Chainlit injects its own),
     // then add ours with a cache-busting query param so browsers that already cached
     // Chainlit's default favicon are forced to re-fetch.
-    document.querySelectorAll("link[rel~='icon']").forEach((el) => el.remove());
-    const link = document.createElement('link');
-    link.type = 'image/png';
-    link.rel = 'icon';
-    link.href = '/public/favicon.png?v=2';
-    document.head.appendChild(link);
+    document.querySelectorAll("link[rel~='icon'], link[rel='apple-touch-icon']").forEach((el) => el.remove());
+
+    const iconLinks = [
+        { rel: 'icon', type: 'image/x-icon', href: '/public/favicon.ico?v=3' },
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/public/favicon-32x32.png?v=3' },
+        { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/public/favicon-16x16.png?v=3' },
+        { rel: 'apple-touch-icon', sizes: '180x180', href: '/public/apple-touch-icon.png?v=3' },
+    ];
+    iconLinks.forEach(({ rel, type, sizes, href }) => {
+        const link = document.createElement('link');
+        link.rel = rel;
+        if (type) link.type = type;
+        if (sizes) link.sizes = sizes;
+        link.href = href;
+        document.head.appendChild(link);
+    });
 
     // Add CHAGEE logo to welcome screen
     function addWelcomeLogo() {

@@ -2,6 +2,7 @@
 
 Run with: `chainlit run chat_ui.py -w`
 """
+import asyncio
 import re
 
 import chainlit as cl
@@ -21,16 +22,23 @@ GREETING_PATTERN = re.compile(
     r"^\s*(hello|hi|hey|good morning|good afternoon|good evening)\W*\s*$", re.IGNORECASE
 )
 
-# Initialize tools (will be done on startup)
+# Initialize tools (done in the background after the server starts listening,
+# so Railway/any host sees an open port immediately instead of timing out
+# while the knowledge base builds).
 search_tool = None
 scrape_tool = None
 llm_generator = None
 web_search_tool = None
 agent_runner = None
+tools_ready = asyncio.Event()
 
 
-def initialize_tools():
-    """Initialize RAG tools and run initial data fetch if needed."""
+def _build_tools():
+    """Blocking setup: RAG tools plus an initial crawl if the DB is empty.
+
+    Runs in a worker thread (see on_app_startup) so it never blocks the
+    event loop or delays the server from accepting connections.
+    """
     global search_tool, scrape_tool, llm_generator, web_search_tool, agent_runner
 
     print("🚀 Initializing CHAGEEPT...")
@@ -61,8 +69,15 @@ def initialize_tools():
     print("✅ CHAGEEPT ready!")
 
 
-# Initialize on module load
-initialize_tools()
+@cl.on_app_startup
+async def on_app_startup():
+    """Kick off tool initialization without blocking server startup."""
+
+    async def run_and_signal():
+        await asyncio.to_thread(_build_tools)
+        tools_ready.set()
+
+    asyncio.create_task(run_and_signal())
 
 
 @cl.on_chat_start
@@ -105,6 +120,10 @@ async def on_message(message: cl.Message):
             content="Hello! 👋 I'm your CHAGEE assistant. I can help you with our menu, store locations, and current promotions. What would you like to know?"
         ).send()
         return
+
+    if not tools_ready.is_set():
+        async with cl.Step(name="Warming up CHAGEE knowledge base...") as step:
+            await tools_ready.wait()
 
     history = cl.user_session.get("history", [])
 
