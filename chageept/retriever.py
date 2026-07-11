@@ -62,18 +62,20 @@ class SearchTool:
         for d in docs:
             self._doc_registry[d.id] = d
 
-    def search(self, query: str, top_k: int = 4) -> List[SearchResult]:
-        """Semantic search using embeddings."""
+    def search(self, query: str, top_k: int = 4, category: Optional[str] = None) -> List[SearchResult]:
+        """Semantic search using embeddings, optionally restricted to a category."""
         query_embedding = self.model.encode([query], show_progress_bar=False).tolist()[0]
-        results_raw = self.collection.query(query_embeddings=[query_embedding], n_results=top_k)
-        
+        query_kwargs = {"query_embeddings": [query_embedding], "n_results": top_k}
+        if category:
+            query_kwargs["where"] = {"category": category}
+        results_raw = self.collection.query(**query_kwargs)
+
         search_results = []
         if results_raw["ids"] and results_raw["ids"][0]:
             for i, doc_id in enumerate(results_raw["ids"][0]):
-                # ChromaDB returns cosine distance (0 = identical, 2 = opposite)
-                # Convert to similarity score (1 = identical, 0 = orthogonal, -1 = opposite)
+                # ChromaDB cosine distance = 1 - cosine_similarity, so similarity = 1 - distance
                 distance = results_raw["distances"][0][i] if "distances" in results_raw else 1.0
-                score = 1.0 - (distance / 2.0)  # Normalize to 0-1 range
+                score = 1.0 - distance
                 score = max(0.0, min(1.0, score))  # Clamp to [0, 1]
                 
                 doc = self._doc_registry.get(doc_id)

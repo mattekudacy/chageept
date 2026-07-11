@@ -1,11 +1,14 @@
-"""LLM generation layer using HuggingFace inference API (free tier).
+"""LLM generation layer using Google AI Studio's OpenAI-compatible Gemini API.
 
-Supports Llama-3-8B-Instruct or Mistral-7B-Instruct models.
+Supports any Gemini model available via https://ai.google.dev.
 Falls back to a simple template-based response if LLM unavailable.
 """
 import os
 from typing import List, Optional
-from huggingface_hub import InferenceClient
+from openai import OpenAI
+
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+REQUEST_TIMEOUT_SECONDS = 30
 
 
 SYSTEM_PROMPT = """You are a helpful and friendly CHAGEE Philippines assistant.
@@ -28,30 +31,32 @@ Maintain a warm, premium brand tone. Be helpful and informative."""
 
 
 class LLMGenerator:
-    """LLM generation using HuggingFace Inference API."""
+    """LLM generation using Google AI Studio's OpenAI-compatible Gemini API."""
 
     def __init__(
         self,
-        model_name: str = "meta-llama/Meta-Llama-3-8B-Instruct",
+        model_name: str = "gemini-2.5-flash",
         api_token: Optional[str] = None,
     ):
         self.model_name = model_name
-        self.api_token = api_token or os.getenv("HUGGINGFACE_TOKEN")
+        self.api_token = api_token or os.getenv("GEMINI_API_KEY")
         self.client = None
         if self.api_token:
             try:
-                self.client = InferenceClient(token=self.api_token)
+                self.client = OpenAI(
+                    base_url=GEMINI_BASE_URL,
+                    api_key=self.api_token,
+                    timeout=REQUEST_TIMEOUT_SECONDS,
+                )
             except Exception:
                 self.client = None
 
-    def generate_answer(
-        self, query: str, context_chunks: List[str], source_urls: List[str]
-    ) -> str:
+    def generate_answer(self, query: str, context_chunks: List[str]) -> str:
         """Generate answer from query and retrieved context."""
         if not self.client:
             # Fallback: simple template-based answer
             print("⚠️ LLM unavailable - using fallback template")
-            return self._fallback_answer(query, context_chunks, source_urls)
+            return self._fallback_answer(context_chunks)
 
         context_text = "\n\n".join(
             [f"[Context {i+1}]: {chunk}" for i, chunk in enumerate(context_chunks)]
@@ -84,7 +89,7 @@ User question: {query}
             # Use more tokens for list queries to prevent cutoffs
             max_tokens = 800 if is_list_query else 400
             
-            response = self.client.chat_completion(
+            response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 max_tokens=max_tokens,
@@ -94,11 +99,9 @@ User question: {query}
             return answer
         except Exception as e:
             print(f"LLM generation error: {e}")
-            return self._fallback_answer(query, context_chunks, source_urls)
+            return self._fallback_answer(context_chunks)
 
-    def _fallback_answer(
-        self, query: str, context_chunks: List[str], source_urls: List[str]
-    ) -> str:
+    def _fallback_answer(self, context_chunks: List[str]) -> str:
         """Simple template-based fallback when LLM unavailable."""
         if context_chunks:
             # Use the first context chunk as the answer

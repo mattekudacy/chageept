@@ -1,10 +1,13 @@
 // Custom JavaScript for CHAGEEPT
 (function() {
-    // Update favicon
-    const link = document.querySelector("link[rel~='icon']") || document.createElement('link');
+    // Update favicon - remove any existing icon links first (Chainlit injects its own),
+    // then add ours with a cache-busting query param so browsers that already cached
+    // Chainlit's default favicon are forced to re-fetch.
+    document.querySelectorAll("link[rel~='icon']").forEach((el) => el.remove());
+    const link = document.createElement('link');
     link.type = 'image/png';
     link.rel = 'icon';
-    link.href = '/public/favicon.png';
+    link.href = '/public/favicon.png?v=2';
     document.head.appendChild(link);
 
     // Add CHAGEE logo to welcome screen

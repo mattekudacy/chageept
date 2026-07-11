@@ -3,7 +3,7 @@ beautifulsoup4
 chromadb
 python-dotenv
 chainlit
-huggingface-hub>=0.34.0,<1.0
+openai>=1.0.0
 
 # CPU-only PyTorch (much smaller than full torch)
 --extra-index-url https://download.pytorch.org/whl/cpu

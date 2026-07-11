@@ -12,7 +12,9 @@ CHAGEEPT is a personal fun project - a chatbot that knows everything about CHAGE
 
 - **RAG (Retrieval-Augmented Generation)** to answer questions based on scraped website data
 - **ChromaDB** for vector storage and semantic search
-- **HuggingFace LLM** (Llama-3-8B-Instruct) for natural language responses
+- **Gemini LLM** (via Google AI Studio's OpenAI-compatible API) for natural language responses
+- **Agentic tool-calling loop** - the LLM plans across knowledge-base search, on-demand scraping, and a
+  Tavily web-search fallback (CHAGEE-only, used only after the knowledge base comes up short)
 - **Chainlit** for a ChatGPT-style web interface
 
 ## Features
@@ -34,7 +36,8 @@ CHAGEEPT is a personal fun project - a chatbot that knows everything about CHAGE
 2. **Set up environment variables**
    ```bash
    cp .env.example .env
-   # Edit .env and add your HUGGINGFACE_TOKEN
+   # Edit .env and add your GEMINI_API_KEY
+   # Optionally add TAVILY_API_KEY to enable web-search fallback
    ```
 
 3. **Build the knowledge base**
@@ -55,9 +58,11 @@ CHAGEEPT is a personal fun project - a chatbot that knows everything about CHAGE
 chageept/
 ├── chat_ui.py           # Main Chainlit app
 ├── chageept/
+│   ├── agent.py         # Tool-calling planning loop (search/scrape/web_search/answer)
 │   ├── scraper.py       # Web scraper for CHAGEE website
 │   ├── retriever.py     # ChromaDB vector search
-│   ├── llm.py           # HuggingFace LLM integration
+│   ├── llm.py           # Gemini LLM integration
+│   ├── websearch.py     # Tavily web search fallback
 │   └── tools.py         # Data models
 ├── scripts/
 │   └── seed_crawler.py  # Database builder
@@ -72,7 +77,7 @@ chageept/
 | UI | Chainlit |
 | Vector DB | ChromaDB |
 | Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
-| LLM | Meta Llama-3-8B-Instruct (via HuggingFace) |
+| LLM | gemini-2.5-flash (via Google AI Studio) |
 | Scraping | BeautifulSoup4 |
 
 ## Deployment
