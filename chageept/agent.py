@@ -19,7 +19,6 @@ from .websearch import TavilySearchTool
 MAX_STEPS = 5
 CALL_MODEL_MAX_RETRIES = 3
 LOW_THRESHOLD = 0.2
-WEB_SEARCH_TRIGGER_THRESHOLD = 0.35
 ALLOWED_SCRAPE_DOMAIN = "global.chagee.com"
 KNOWN_CATEGORIES = {
     "menu", "stores", "about", "contact", "news",
@@ -91,7 +90,6 @@ class AgentRunner:
         collected_sources: List[Dict] = []
         seen_urls = set()
         kb_searched = False
-        kb_best_score = 0.0
 
         for step in range(MAX_STEPS):
             try:
@@ -128,7 +126,6 @@ class AgentRunner:
             if kind == "search":
                 observation, sources, top_score = self._do_search(action)
                 kb_searched = True
-                kb_best_score = max(kb_best_score, top_score)
                 for s in sources:
                     if s["url"] not in seen_urls:
                         collected_sources.append(s)
@@ -136,9 +133,7 @@ class AgentRunner:
             elif kind == "scrape":
                 observation = self._do_scrape(str(action.get("url", "")))
             elif kind == "web_search":
-                observation, sources = self._do_web_search(
-                    action, kb_searched=kb_searched, kb_best_score=kb_best_score
-                )
+                observation, sources = self._do_web_search(action, kb_searched=kb_searched)
                 for s in sources:
                     if s["url"] not in seen_urls:
                         collected_sources.append(s)
@@ -242,9 +237,7 @@ class AgentRunner:
 
         return "\n---\n".join(chunks), sources
 
-    def _do_web_search(
-        self, action: Dict, kb_searched: bool, kb_best_score: float
-    ) -> Tuple[str, List[Dict]]:
+    def _do_web_search(self, action: Dict, kb_searched: bool) -> Tuple[str, List[Dict]]:
         if not self.web_search_tool.is_available:
             return "Web search unavailable: no Tavily API key configured.", []
 
@@ -252,13 +245,6 @@ class AgentRunner:
             return (
                 "Web search denied: you must search the knowledge base first. "
                 "Try the 'search' action before falling back to the web.",
-                [],
-            )
-
-        if kb_best_score >= WEB_SEARCH_TRIGGER_THRESHOLD:
-            return (
-                "Web search denied: the knowledge base already returned a "
-                "sufficiently relevant result. Use that instead.",
                 [],
             )
 
