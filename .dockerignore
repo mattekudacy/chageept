@@ -23,6 +23,7 @@ Thumbs.db
 # Environment (set in Railway dashboard)
 .env
 
-# Unnecessary files
-*.md
+# Unnecessary files (chainlit.md is NOT excluded - it's the app's welcome
+# screen content, loaded by Chainlit at runtime)
+README.md
 *.log

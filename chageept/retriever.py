@@ -36,11 +36,19 @@ class SearchTool:
                     size=EMBEDDING_DIMENSIONS, distance=models.Distance.COSINE
                 ),
             )
-            self.client.create_payload_index(
-                collection_name=collection_name,
-                field_name="category",
-                field_schema=models.PayloadSchemaType.KEYWORD,
-            )
+        # create_payload_index is idempotent - safe to call even if the
+        # index already exists, so this also backfills the "url" index onto
+        # a collection created before it was added.
+        self.client.create_payload_index(
+            collection_name=collection_name,
+            field_name="category",
+            field_schema=models.PayloadSchemaType.KEYWORD,
+        )
+        self.client.create_payload_index(
+            collection_name=collection_name,
+            field_name="url",
+            field_schema=models.PayloadSchemaType.KEYWORD,
+        )
 
     def _embed(self, texts: List[str]) -> List[List[float]]:
         """Embed a list of texts via Gemini's embedding API, batching to stay
@@ -62,9 +70,22 @@ class SearchTool:
         return embeddings
 
     def add_documents(self, docs: List[Document]):
-        """Embed and store documents in Qdrant."""
+        """Embed and store documents in Qdrant. Re-scraping a URL replaces
+        its existing chunks rather than appending duplicates - deletes by
+        URL first, so a page that shrinks between crawls doesn't leave
+        orphaned stale chunks behind."""
         if not docs:
             return
+        urls = {d.url for d in docs}
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[models.FieldCondition(key="url", match=models.MatchAny(any=list(urls)))]
+                )
+            ),
+        )
+
         texts = [d.text for d in docs]
         embeddings = self._embed(texts)
         points = [

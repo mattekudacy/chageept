@@ -7,6 +7,8 @@ import os
 from typing import List, Optional
 from openai import OpenAI
 
+from .tools import is_list_query
+
 OLLAMA_BASE_URL = "https://ollama.com/v1"
 REQUEST_TIMEOUT_SECONDS = 30
 
@@ -62,17 +64,15 @@ class LLMGenerator:
             [f"[Context {i+1}]: {chunk}" for i, chunk in enumerate(context_chunks)]
         )
         
-        # Detect if this is a list query
-        list_keywords = ["list", "all", "menu", "items", "what do you have", "what are", "show me"]
-        is_list_query = any(kw in query.lower() for kw in list_keywords)
-        
-        if is_list_query:
+        is_list = is_list_query(query)
+
+        if is_list:
             instruction = """List ALL the items/products mentioned in the context.
 For each item, include its name and a brief description if available.
 Format as a clean numbered or bulleted list."""
         else:
             instruction = "Provide a helpful, conversational answer based on the context above. Be natural and friendly."
-        
+
         user_message = f"""Context from CHAGEE website:
 {context_text}
 
@@ -87,7 +87,7 @@ User question: {query}
 
         try:
             # Use more tokens for list queries to prevent cutoffs
-            max_tokens = 800 if is_list_query else 400
+            max_tokens = 800 if is_list else 400
             
             response = self.client.chat.completions.create(
                 model=self.model_name,

@@ -127,10 +127,12 @@ async def on_message(message: cl.Message):
 
     history = cl.user_session.get("history", [])
 
-    # Process query through the agent loop (search / scrape / answer)
+    # Process query through the agent loop (search / scrape / answer). Runs
+    # in a worker thread so a slow multi-step agent run doesn't block the
+    # event loop and freeze other users' concurrent messages.
     async with cl.Step(name="Thinking about CHAGEE knowledge base...") as step:
         try:
-            data = agent_runner.run(user_query, history=history)
+            data = await asyncio.to_thread(agent_runner.run, user_query, history)
         except Exception as e:
             print(f"⚠️ Agent run failed: {e}")
             await cl.Message(
