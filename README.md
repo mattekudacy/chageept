@@ -78,7 +78,7 @@ chageept/
 | UI | Chainlit |
 | Vector DB | Qdrant Cloud |
 | Embeddings | gemini-embedding-001 (via Google AI Studio) |
-| LLM | gpt-oss:120b-cloud (via Ollama Cloud) |
+| LLM | gemma4 (via Ollama Cloud) |
 | Scraping | BeautifulSoup4 |
 
 ## Deployment

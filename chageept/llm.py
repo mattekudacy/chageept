@@ -1,6 +1,6 @@
 """LLM generation layer using Ollama Cloud's OpenAI-compatible API.
 
-Supports any cloud model available via https://ollama.com (e.g. gpt-oss:120b-cloud).
+Supports any cloud model available via https://ollama.com (e.g. gemma4).
 Falls back to a simple template-based response if LLM unavailable.
 """
 import os
@@ -35,7 +35,7 @@ class LLMGenerator:
 
     def __init__(
         self,
-        model_name: str = "gpt-oss:120b-cloud",
+        model_name: str = "gemma4",
         api_token: Optional[str] = None,
     ):
         self.model_name = model_name

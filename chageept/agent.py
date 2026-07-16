@@ -102,8 +102,18 @@ class AgentRunner:
 
             action = self._parse_action(raw)
             if not action or "action" not in action:
-                # Model didn't follow protocol - treat its raw text as the answer.
-                return {"answer": raw, "sources": collected_sources, "steps": step + 1}
+                # Model broke the JSON protocol (e.g. plain narration instead
+                # of an action) - nudge it to retry rather than surfacing the
+                # raw text as if it were the answer.
+                messages.append({"role": "assistant", "content": raw})
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "Observation: Invalid response - you must reply with ONLY a single JSON "
+                        "action object (search, scrape, web_search, or final_answer), no other text."
+                    ),
+                })
+                continue
 
             kind = action.get("action")
 
@@ -143,9 +153,9 @@ class AgentRunner:
         return self._fallback_rag(query, sources=collected_sources)
 
     def _call_model(self, messages: List[Dict]) -> str:
-        # gpt-oss:120b-cloud occasionally emits a spontaneous, unrequested
-        # tool call (e.g. container.exec) instead of the JSON action we
-        # asked for, leaving content empty. Resampling reliably avoids it.
+        # Some cloud models occasionally emit a spontaneous, unrequested tool
+        # call instead of the JSON action we asked for, leaving content
+        # empty. Resampling reliably avoids it.
         content = ""
         for _ in range(CALL_MODEL_MAX_RETRIES):
             response = self.llm.client.chat.completions.create(
