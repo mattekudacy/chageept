@@ -4,14 +4,14 @@ A RAG-powered AI chatbot for CHAGEE Philippines. Ask questions about the menu, s
 
 ![Python](https://img.shields.io/badge/Python-3.9+-blue)
 ![Chainlit](https://img.shields.io/badge/UI-Chainlit-green)
-![ChromaDB](https://img.shields.io/badge/Vector%20DB-ChromaDB-orange)
+![Qdrant](https://img.shields.io/badge/Vector%20DB-Qdrant-orange)
 
 ## What is this?
 
 CHAGEEPT is a personal fun project - a chatbot that knows everything about CHAGEE Philippines. It uses:
 
 - **RAG (Retrieval-Augmented Generation)** to answer questions based on scraped website data
-- **ChromaDB** for vector storage and semantic search
+- **Qdrant Cloud** for vector storage and semantic search
 - **Ollama Cloud LLM** (via Ollama's OpenAI-compatible API) for natural language responses
 - **Gemini embeddings** (via Google AI Studio's OpenAI-compatible API) for vector search
 - **Agentic tool-calling loop** - the LLM plans across knowledge-base search, on-demand scraping, and a
@@ -37,7 +37,8 @@ CHAGEEPT is a personal fun project - a chatbot that knows everything about CHAGE
 2. **Set up environment variables**
    ```bash
    cp .env.example .env
-   # Edit .env and add your GEMINI_API_KEY (embeddings) and OLLAMA_API_KEY (chat)
+   # Edit .env and add your GEMINI_API_KEY (embeddings), OLLAMA_API_KEY (chat),
+   # and QDRANT_URL/QDRANT_API_KEY (vector storage)
    # Optionally add TAVILY_API_KEY to enable web-search fallback
    ```
 
@@ -61,14 +62,13 @@ chageept/
 ├── chageept/
 │   ├── agent.py         # Tool-calling planning loop (search/scrape/web_search/answer)
 │   ├── scraper.py       # Web scraper for CHAGEE website
-│   ├── retriever.py     # ChromaDB vector search
+│   ├── retriever.py     # Qdrant vector search
 │   ├── llm.py           # Ollama Cloud LLM integration
 │   ├── websearch.py     # Tavily web search fallback
 │   └── tools.py         # Data models
 ├── scripts/
 │   └── seed_crawler.py  # Database builder
-├── public/              # UI assets (logo, favicon)
-└── chroma_db/           # Vector database (auto-generated)
+└── public/              # UI assets (logo, favicon)
 ```
 
 ## Tech Stack
@@ -76,7 +76,7 @@ chageept/
 | Component | Technology |
 |-----------|------------|
 | UI | Chainlit |
-| Vector DB | ChromaDB |
+| Vector DB | Qdrant Cloud |
 | Embeddings | gemini-embedding-001 (via Google AI Studio) |
 | LLM | gpt-oss:120b-cloud (via Ollama Cloud) |
 | Scraping | BeautifulSoup4 |

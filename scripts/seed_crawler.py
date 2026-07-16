@@ -116,7 +116,7 @@ def main():
     
     # Initialize tools
     scraper = ScrapeTool()
-    retriever = SearchTool(persist_directory="./chroma_db")
+    retriever = SearchTool()
     
     total_docs = 0
     failed = []
@@ -138,7 +138,7 @@ def main():
     print(f"   Pages crawled: {len(all_urls)}")
     print(f"   Documents indexed: {total_docs}")
     print(f"   Failed: {len(failed)}")
-    print(f"   Vector DB: ./chroma_db")
+    print(f"   Vector DB: Qdrant Cloud")
     print(f"{'='*50}")
 
 

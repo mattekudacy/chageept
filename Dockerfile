@@ -21,15 +21,10 @@ COPY . .
 # Make start script executable
 RUN chmod +x start.sh
 
-# Pre-build the knowledge base at image build time. Embedding now goes through
-# Gemini's hosted API, so GEMINI_API_KEY must be available during the build -
-# set it as a build-time env var on the host (e.g. Render dashboard). This
-# bakes a ready chroma_db/ into the image so cold starts on free-tier hosts
-# (no persistent disk) don't have to re-crawl the CHAGEE site before serving
-# the first request.
-ARG GEMINI_API_KEY
-ENV GEMINI_API_KEY=$GEMINI_API_KEY
-RUN python -m scripts.seed_crawler
+# The knowledge base now lives in Qdrant Cloud, not baked into the image, so
+# no build-time crawl is needed here. chat_ui.py runs the initial crawl on
+# first startup (only when the Qdrant collection is empty) and reuses it on
+# every subsequent deploy since the data persists externally.
 
 # Expose port
 EXPOSE 8000

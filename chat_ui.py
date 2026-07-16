@@ -54,7 +54,7 @@ def _build_tools():
 
     # Check if database is empty and run initial update
     try:
-        doc_count = search_tool.collection.count()
+        doc_count = search_tool.count()
         if doc_count == 0:
             print("📭 Database is empty - running initial data fetch...")
             from scripts.seed_crawler import main as run_crawler

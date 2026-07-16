@@ -1,61 +1,46 @@
 import os
 import time
 from typing import List, Optional
-import chromadb
 from openai import OpenAI, RateLimitError
+from qdrant_client import QdrantClient, models
 from .tools import SearchResult, Document
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 EMBEDDING_MODEL = "gemini-embedding-001"
+EMBEDDING_DIMENSIONS = 3072
 EMBEDDING_BATCH_SIZE = 50
 EMBEDDING_MAX_RETRIES = 5
 EMBEDDING_RETRY_BASE_DELAY = 5
 
 
 class SearchTool:
-    """SearchTool powered by ChromaDB and Gemini's hosted embedding API.
+    """SearchTool powered by Qdrant and Gemini's hosted embedding API.
 
     Methods:
       - search(query, top_k) -> List[SearchResult]
       - add_documents(docs)
     """
 
-    def __init__(self, collection_name: str = "chageept_docs", persist_directory: str = "./chroma_db"):
+    def __init__(self, collection_name: str = "chageept_docs"):
         self.embedding_client = OpenAI(
             base_url=GEMINI_BASE_URL, api_key=os.getenv("GEMINI_API_KEY")
         )
-        self.client = chromadb.PersistentClient(path=persist_directory)
-        # Use cosine similarity for semantic search
-        self.collection = self.client.get_or_create_collection(
-            name=collection_name,
-            metadata={"hnsw:space": "cosine"}
+        self.client = QdrantClient(
+            url=os.getenv("QDRANT_URL"), api_key=os.getenv("QDRANT_API_KEY")
         )
-        self._doc_registry = {}  # map doc_id -> Document
-        
-        # Rebuild doc_registry from existing ChromaDB data
-        self._rebuild_registry()
-    
-    def _rebuild_registry(self):
-        """Rebuild the document registry from ChromaDB metadata."""
-        try:
-            results = self.collection.get()
-            if results and results["ids"]:
-                from .tools import Document
-                for i, doc_id in enumerate(results["ids"]):
-                    metadata = results["metadatas"][i] if results["metadatas"] else {}
-                    text = results["documents"][i] if results["documents"] else ""
-                    
-                    doc = Document(
-                        id=doc_id,
-                        title=metadata.get("title", ""),
-                        url=metadata.get("url", ""),
-                        category=metadata.get("category"),
-                        text=text,
-                        metadata=metadata
-                    )
-                    self._doc_registry[doc_id] = doc
-        except Exception:
-            pass  # Empty collection or error, start fresh
+        self.collection_name = collection_name
+        if not self.client.collection_exists(collection_name=collection_name):
+            self.client.create_collection(
+                collection_name=collection_name,
+                vectors_config=models.VectorParams(
+                    size=EMBEDDING_DIMENSIONS, distance=models.Distance.COSINE
+                ),
+            )
+            self.client.create_payload_index(
+                collection_name=collection_name,
+                field_name="category",
+                field_schema=models.PayloadSchemaType.KEYWORD,
+            )
 
     def _embed(self, texts: List[str]) -> List[List[float]]:
         """Embed a list of texts via Gemini's embedding API, batching to stay
@@ -77,39 +62,60 @@ class SearchTool:
         return embeddings
 
     def add_documents(self, docs: List[Document]):
-        """Embed and store documents in ChromaDB."""
+        """Embed and store documents in Qdrant."""
         if not docs:
             return
-        ids = [d.id for d in docs]
         texts = [d.text for d in docs]
         embeddings = self._embed(texts)
-        metadatas = [
-            {"title": d.title, "url": d.url, "category": d.category or ""}
-            for d in docs
+        points = [
+            models.PointStruct(
+                id=d.id,
+                vector=embedding,
+                payload={
+                    "title": d.title,
+                    "url": d.url,
+                    "category": d.category or "",
+                    "text": d.text,
+                },
+            )
+            for d, embedding in zip(docs, embeddings)
         ]
-        self.collection.add(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
-        for d in docs:
-            self._doc_registry[d.id] = d
+        self.client.upsert(collection_name=self.collection_name, points=points)
 
     def search(self, query: str, top_k: int = 4, category: Optional[str] = None) -> List[SearchResult]:
         """Semantic search using embeddings, optionally restricted to a category."""
         query_embedding = self._embed([query])[0]
-        query_kwargs = {"query_embeddings": [query_embedding], "n_results": top_k}
+        query_filter = None
         if category:
-            query_kwargs["where"] = {"category": category}
-        results_raw = self.collection.query(**query_kwargs)
+            query_filter = models.Filter(
+                must=[models.FieldCondition(key="category", match=models.MatchValue(value=category))]
+            )
+        results_raw = self.client.query_points(
+            collection_name=self.collection_name,
+            query=query_embedding,
+            query_filter=query_filter,
+            limit=top_k,
+            with_payload=True,
+        )
 
         search_results = []
-        if results_raw["ids"] and results_raw["ids"][0]:
-            for i, doc_id in enumerate(results_raw["ids"][0]):
-                # ChromaDB cosine distance = 1 - cosine_similarity, so similarity = 1 - distance
-                distance = results_raw["distances"][0][i] if "distances" in results_raw else 1.0
-                score = 1.0 - distance
-                score = max(0.0, min(1.0, score))  # Clamp to [0, 1]
-                
-                doc = self._doc_registry.get(doc_id)
-                if doc:
-                    snippet = doc.text[:300].replace("\n", " ")
-                    search_results.append(SearchResult(document=doc, score=score, snippet=snippet))
-        
+        for point in results_raw.points:
+            payload = point.payload or {}
+            text = payload.get("text", "")
+            doc = Document(
+                id=str(point.id),
+                title=payload.get("title", ""),
+                url=payload.get("url", ""),
+                category=payload.get("category"),
+                text=text,
+                metadata=payload,
+            )
+            score = max(0.0, min(1.0, point.score))  # Clamp to [0, 1]
+            snippet = text[:300].replace("\n", " ")
+            search_results.append(SearchResult(document=doc, score=score, snippet=snippet))
+
         return search_results
+
+    def count(self) -> int:
+        """Number of documents currently stored."""
+        return self.client.count(collection_name=self.collection_name).count

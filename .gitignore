@@ -14,9 +14,6 @@ env/
 # Environment variables (keep .env.example, ignore .env)
 .env
 
-# Local database (will be created on Railway)
-chroma_db/
-
 # IDE
 .idea/
 .vscode/
