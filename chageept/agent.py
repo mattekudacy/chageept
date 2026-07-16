@@ -16,8 +16,9 @@ from .retriever import SearchTool
 from .scraper import ScrapeNotAllowed, ScrapeTool
 from .websearch import TavilySearchTool
 
-MAX_STEPS = 5
+MAX_STEPS = 9
 CALL_MODEL_MAX_RETRIES = 3
+MAX_SELF_CRITIQUE_RETRIES = 2
 LOW_THRESHOLD = 0.2
 ALLOWED_SCRAPE_DOMAIN = "global.chagee.com"
 KNOWN_CATEGORIES = {
@@ -63,6 +64,28 @@ Rules for final_answer:
 advice), politely decline and steer them back to CHAGEE topics instead of using any tool.
 - Take exactly one action per turn."""
 
+CRITIQUE_SYSTEM_PROMPT = """You are a strict quality checker for a CHAGEE Philippines assistant. You will \
+be shown the user's question and a draft answer the assistant is about to send. Decide whether the draft \
+actually answers the question, or whether it's a premature give-up that should try harder first.
+
+A draft FAILS review (sufficient=false) if:
+- It says "I don't have that information" / "I couldn't find" / recommends visiting a store or website,
+  WHILE at least one search/web_search action in this conversation has NOT yet been tried with a
+  differently-worded query, OR the web_search action has never been used at all despite being available.
+- It gives up after only one search attempt or one web_search attempt without trying an alternate phrasing.
+- It ignores relevant facts (e.g. a specific price, phone number, or date) that ARE present in the
+  observations shown to you, even if buried in an unrelated-looking result.
+
+A draft PASSES review (sufficient=true) if:
+- It directly answers the question using facts from the observations, OR
+- It has already tried search AND web_search with at least one reworded attempt each, and genuinely
+  no source contains the answer, OR
+- The question is legitimately unanswerable from any CHAGEE source (unrelated to CHAGEE, or asks for
+  private/internal data).
+
+Respond with ONLY a single JSON object, no other text:
+{"sufficient": true} or {"sufficient": false, "suggestion": "<a specific, differently-worded action to try next, e.g. a rephrased web_search query>"}"""
+
 
 class AgentRunner:
     """Runs the search/scrape/final_answer planning loop for a single query."""
@@ -90,6 +113,7 @@ class AgentRunner:
         collected_sources: List[Dict] = []
         seen_urls = set()
         kb_searched = False
+        critique_attempts = 0
 
         for step in range(MAX_STEPS):
             try:
@@ -116,15 +140,30 @@ class AgentRunner:
             kind = action.get("action")
 
             if kind == "final_answer":
-                answer = str(action.get("answer", "")).strip()
+                answer = str(action.get("answer", "")).strip() or "I don't have that information right now."
+                if critique_attempts < MAX_SELF_CRITIQUE_RETRIES and step + 1 < MAX_STEPS:
+                    verdict = self._critique_answer(query, answer, messages)
+                    if not verdict.get("sufficient", True):
+                        critique_attempts += 1
+                        suggestion = str(verdict.get("suggestion") or "").strip()
+                        messages.append({"role": "assistant", "content": raw})
+                        messages.append({
+                            "role": "user",
+                            "content": (
+                                "Observation: Your draft answer was reviewed and rejected as a premature "
+                                "give-up - you have not exhausted search/web_search with reworded queries. "
+                                f"{('Try this next: ' + suggestion) if suggestion else 'Try a differently-worded search or web_search query before answering.'}"
+                            ),
+                        })
+                        continue
                 return {
-                    "answer": answer or "I don't have that information right now.",
+                    "answer": answer,
                     "sources": collected_sources,
                     "steps": step + 1,
                 }
 
             if kind == "search":
-                observation, sources, top_score = self._do_search(action)
+                observation, sources, _ = self._do_search(action)
                 kb_searched = True
                 for s in sources:
                     if s["url"] not in seen_urls:
@@ -144,8 +183,58 @@ class AgentRunner:
             messages.append({"role": "assistant", "content": raw})
             messages.append({"role": "user", "content": f"Observation: {observation}"})
 
-        # Ran out of planning steps - force an answer from whatever context we gathered.
+        # Ran out of planning steps - force a final answer from the
+        # observations already gathered in this conversation (search,
+        # scrape, web_search), instead of discarding them and falling back
+        # to a fresh KB-only search that ignores web_search results we
+        # already have.
+        messages.append({
+            "role": "user",
+            "content": (
+                "Observation: You are out of steps. Respond now with ONLY "
+                '{"action": "final_answer", "answer": "..."} using the best '
+                "answer you can give from the observations above."
+            ),
+        })
+        try:
+            raw = self._call_model(messages)
+            action = self._parse_action(raw)
+        except Exception:
+            action = None
+        if action and action.get("action") == "final_answer":
+            answer = str(action.get("answer", "")).strip()
+            if answer:
+                return {"answer": answer, "sources": collected_sources, "steps": MAX_STEPS}
+
         return self._fallback_rag(query, sources=collected_sources)
+
+    def _critique_answer(self, query: str, draft_answer: str, messages: List[Dict]) -> Dict:
+        """Ask the model to judge its own draft final_answer against the
+        original question and the actions/observations tried so far, so a
+        premature give-up gets sent back for another attempt instead of
+        reaching the user."""
+        transcript = "\n\n".join(
+            f"{m['role'].upper()}: {m['content']}" for m in messages[1:]
+        )
+        critique_messages = [
+            {"role": "system", "content": CRITIQUE_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    f"Original question: {query}\n\n"
+                    f"Conversation so far (actions and observations):\n{transcript}\n\n"
+                    f"Draft answer about to be sent: {draft_answer}"
+                ),
+            },
+        ]
+        try:
+            raw = self._call_model(critique_messages)
+        except Exception:
+            return {"sufficient": True}
+        verdict = self._parse_action(raw)
+        if not isinstance(verdict, dict) or "sufficient" not in verdict:
+            return {"sufficient": True}
+        return verdict
 
     def _call_model(self, messages: List[Dict]) -> str:
         # Some cloud models occasionally emit a spontaneous, unrequested tool
