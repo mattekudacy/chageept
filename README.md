@@ -12,7 +12,8 @@ CHAGEEPT is a personal fun project - a chatbot that knows everything about CHAGE
 
 - **RAG (Retrieval-Augmented Generation)** to answer questions based on scraped website data
 - **ChromaDB** for vector storage and semantic search
-- **Gemini LLM** (via Google AI Studio's OpenAI-compatible API) for natural language responses
+- **Ollama Cloud LLM** (via Ollama's OpenAI-compatible API) for natural language responses
+- **Gemini embeddings** (via Google AI Studio's OpenAI-compatible API) for vector search
 - **Agentic tool-calling loop** - the LLM plans across knowledge-base search, on-demand scraping, and a
   Tavily web-search fallback (CHAGEE-only, used only after the knowledge base comes up short)
 - **Chainlit** for a ChatGPT-style web interface
@@ -36,7 +37,7 @@ CHAGEEPT is a personal fun project - a chatbot that knows everything about CHAGE
 2. **Set up environment variables**
    ```bash
    cp .env.example .env
-   # Edit .env and add your GEMINI_API_KEY
+   # Edit .env and add your GEMINI_API_KEY (embeddings) and OLLAMA_API_KEY (chat)
    # Optionally add TAVILY_API_KEY to enable web-search fallback
    ```
 
@@ -61,7 +62,7 @@ chageept/
 │   ├── agent.py         # Tool-calling planning loop (search/scrape/web_search/answer)
 │   ├── scraper.py       # Web scraper for CHAGEE website
 │   ├── retriever.py     # ChromaDB vector search
-│   ├── llm.py           # Gemini LLM integration
+│   ├── llm.py           # Ollama Cloud LLM integration
 │   ├── websearch.py     # Tavily web search fallback
 │   └── tools.py         # Data models
 ├── scripts/
@@ -76,8 +77,8 @@ chageept/
 |-----------|------------|
 | UI | Chainlit |
 | Vector DB | ChromaDB |
-| Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
-| LLM | gemini-2.5-flash (via Google AI Studio) |
+| Embeddings | gemini-embedding-001 (via Google AI Studio) |
+| LLM | gpt-oss:120b-cloud (via Ollama Cloud) |
 | Scraping | BeautifulSoup4 |
 
 ## Deployment

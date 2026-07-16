@@ -4,6 +4,11 @@ Run as: `python -m scripts.seed_crawler` (from project root)
 """
 import re
 from urllib.parse import urljoin, urlparse
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from chageept.scraper import ScrapeTool
 from chageept.retriever import SearchTool
 import requests

@@ -1,13 +1,13 @@
-"""LLM generation layer using Google AI Studio's OpenAI-compatible Gemini API.
+"""LLM generation layer using Ollama Cloud's OpenAI-compatible API.
 
-Supports any Gemini model available via https://ai.google.dev.
+Supports any cloud model available via https://ollama.com (e.g. gpt-oss:120b-cloud).
 Falls back to a simple template-based response if LLM unavailable.
 """
 import os
 from typing import List, Optional
 from openai import OpenAI
 
-GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+OLLAMA_BASE_URL = "https://ollama.com/v1"
 REQUEST_TIMEOUT_SECONDS = 30
 
 
@@ -31,20 +31,20 @@ Maintain a warm, premium brand tone. Be helpful and informative."""
 
 
 class LLMGenerator:
-    """LLM generation using Google AI Studio's OpenAI-compatible Gemini API."""
+    """LLM generation using Ollama Cloud's OpenAI-compatible API."""
 
     def __init__(
         self,
-        model_name: str = "gemini-2.5-flash",
+        model_name: str = "gpt-oss:120b-cloud",
         api_token: Optional[str] = None,
     ):
         self.model_name = model_name
-        self.api_token = api_token or os.getenv("GEMINI_API_KEY")
+        self.api_token = api_token or os.getenv("OLLAMA_API_KEY")
         self.client = None
         if self.api_token:
             try:
                 self.client = OpenAI(
-                    base_url=GEMINI_BASE_URL,
+                    base_url=OLLAMA_BASE_URL,
                     api_key=self.api_token,
                     timeout=REQUEST_TIMEOUT_SECONDS,
                 )
