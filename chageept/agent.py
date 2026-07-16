@@ -17,6 +17,7 @@ from .scraper import ScrapeNotAllowed, ScrapeTool
 from .websearch import TavilySearchTool
 
 MAX_STEPS = 5
+CALL_MODEL_MAX_RETRIES = 3
 LOW_THRESHOLD = 0.2
 WEB_SEARCH_TRIGGER_THRESHOLD = 0.35
 ALLOWED_SCRAPE_DOMAIN = "global.chagee.com"
@@ -142,25 +143,58 @@ class AgentRunner:
         return self._fallback_rag(query, sources=collected_sources)
 
     def _call_model(self, messages: List[Dict]) -> str:
-        response = self.llm.client.chat.completions.create(
-            model=self.llm.model_name,
-            messages=messages,
-            max_tokens=600,
-            temperature=0.2,
-        )
-        return response.choices[0].message.content.strip()
+        # gpt-oss:120b-cloud occasionally emits a spontaneous, unrequested
+        # tool call (e.g. container.exec) instead of the JSON action we
+        # asked for, leaving content empty. Resampling reliably avoids it.
+        content = ""
+        for _ in range(CALL_MODEL_MAX_RETRIES):
+            response = self.llm.client.chat.completions.create(
+                model=self.llm.model_name,
+                messages=messages,
+                max_tokens=2000,
+                temperature=0.2,
+            )
+            content = (response.choices[0].message.content or "").strip()
+            if content:
+                break
+        return content
 
     def _parse_action(self, raw: str) -> Optional[Dict]:
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
             pass
-        match = re.search(r"\{.*\}", raw, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(0))
-            except json.JSONDecodeError:
-                return None
+        # The model sometimes appends a hallucinated observation/next-action
+        # after its first JSON object instead of stopping. Only take the
+        # first balanced {...} span, not a greedy match to the last "}" in
+        # the whole response.
+        first_brace = raw.find("{")
+        if first_brace == -1:
+            return None
+        depth = 0
+        in_string = False
+        escape = False
+        for i in range(first_brace, len(raw)):
+            char = raw[i]
+            if in_string:
+                if escape:
+                    escape = False
+                elif char == "\\":
+                    escape = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(raw[first_brace : i + 1])
+                    except json.JSONDecodeError:
+                        return None
         return None
 
     def _do_search(self, action: Dict) -> Tuple[str, List[Dict], float]:
