@@ -28,7 +28,12 @@ class TavilySearchTool:
             json={
                 "api_key": self.api_key,
                 "query": query,
-                "search_depth": "basic",
+                # "advanced" extracts multiple relevant snippets per source
+                # instead of one short summary - empirically the difference
+                # between getting a fragmentary social-media blurb and an
+                # actual price table/FAQ block for long-tail queries like
+                # specific drink prices.
+                "search_depth": "advanced",
                 "max_results": max_results,
                 "include_answer": False,
             },

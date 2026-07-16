@@ -144,17 +144,23 @@ shown the tool results gathered so far and a draft answer. Check whether every s
 the draft (a price, a calorie count, an address, a name, a date, a product attribute) is actually \
 supported by those tool results - not just topically similar to them.
 
-Common failure to catch: the draft answers about Product A using a fact that the tool results actually \
-state about a different, similarly-named Product B (e.g. answering about a "Latte" using a number that \
-the source explicitly attributes to a "Milk Tea"). Read carefully which exact product/entity each fact in \
-the tool results is attached to.
+Common failures to catch:
+- The draft answers about Product A using a fact that the tool results actually state about a
+  different, similarly-named Product B (e.g. answering about a "Latte" using a number that the source
+  explicitly attributes to a "Milk Tea"). Read carefully which exact product/entity each fact is attached to.
+- CHAGEE operates in many countries with different prices and currencies (PHP in the Philippines, RM in
+  Malaysia, RMB in China, SGD in Singapore, USD in the US, etc). A price is misattributed if it's stated
+  as a Philippine peso (PHP/₱) price but the source actually shows it in a different country's currency,
+  even if the source's page title or URL mentions "Philippines" - check the currency symbol/code next to
+  the actual number, not just the page's stated topic.
 
 A draft is grounded (grounded=true) if every specific fact in it is explicitly attached to the same \
-product/entity the question asks about in the tool results, or if the draft contains no specific claims \
-(pure decline/uncertainty is always grounded).
+product/entity AND the same country/currency the question asks about in the tool results, or if the \
+draft contains no specific claims (pure decline/uncertainty is always grounded).
 
 A draft is NOT grounded (grounded=false) if it states a specific fact that isn't in the tool results at \
-all, or attaches a fact from a different product/entity to the one asked about.
+all, attaches a fact from a different product/entity to the one asked about, or states a price in the \
+wrong currency/country relative to what the source actually shows.
 
 Respond with ONLY a single JSON object, no other text:
 {"grounded": true} or {"grounded": false, "issue": "<the specific unsupported or misattributed claim>"}"""
@@ -197,6 +203,13 @@ class AgentRunner:
                 return self._fallback_rag(query, sources=collected_sources)
 
             tool_call = message.tool_calls[0] if message.tool_calls else None
+            if message.tool_calls and len(message.tool_calls) > 1:
+                # The model can emit parallel tool calls even though our
+                # system prompt asks for one per turn, and parallel_tool_calls=False
+                # isn't enforced by every OpenAI-compatible provider - only
+                # the first call is executed; the rest are silently dropped.
+                # Log so this doesn't fail invisibly if it starts happening.
+                print(f"⚠️ Model returned {len(message.tool_calls)} parallel tool calls; only running the first.")
 
             if not tool_call:
                 answer = (message.content or "").strip() or "I don't have that information right now."
@@ -275,7 +288,7 @@ class AgentRunner:
 
             messages.append({
                 "role": "assistant",
-                "content": message.content,
+                "content": message.content or "",
                 "tool_calls": [{
                     "id": tool_call.id,
                     "type": "function",
@@ -327,6 +340,12 @@ class AgentRunner:
         premature give-up gets sent back for another attempt instead of
         reaching the user."""
         transcript = self._render_transcript(messages)
+        tavily_note = (
+            ""
+            if self.web_search_tool.is_available
+            else "\n\nNote: web_search is NOT available in this conversation (no API key configured) - "
+            "do not fault the draft for not using web_search; judge it on the search results alone."
+        )
         critique_messages = [
             {"role": "system", "content": CRITIQUE_SYSTEM_PROMPT},
             {
@@ -335,16 +354,19 @@ class AgentRunner:
                     f"Original question: {query}\n\n"
                     f"Conversation so far (tool calls and results):\n{transcript}\n\n"
                     f"Draft answer about to be sent: {draft_answer}"
+                    f"{tavily_note}"
                 ),
             },
         ]
         try:
             message = self._call_model(critique_messages, tools=None)
             raw = (message.content or "").strip()
-        except Exception:
+        except Exception as e:
+            print(f"⚠️ Give-up critique call failed, failing open (sufficient=true): {e}")
             return {"sufficient": True}
         verdict = self._parse_json_object(raw)
         if not isinstance(verdict, dict) or "sufficient" not in verdict:
+            print(f"⚠️ Give-up critique returned unparseable output, failing open (sufficient=true): {raw!r}")
             return {"sufficient": True}
         return verdict
 
@@ -367,10 +389,12 @@ class AgentRunner:
         try:
             message = self._call_model(groundedness_messages, tools=None)
             raw = (message.content or "").strip()
-        except Exception:
+        except Exception as e:
+            print(f"⚠️ Groundedness check call failed, failing open (grounded=true): {e}")
             return {"grounded": True}
         verdict = self._parse_json_object(raw)
         if not isinstance(verdict, dict) or "grounded" not in verdict:
+            print(f"⚠️ Groundedness check returned unparseable output, failing open (grounded=true): {raw!r}")
             return {"grounded": True}
         return verdict
 
@@ -466,7 +490,11 @@ class AgentRunner:
         chunks = []
         sources = []
         for r in results:
-            content = (r.get("content") or "")[:1200]
+            # "advanced" search_depth returns much longer per-source content
+            # (multiple snippets, often 1500-2500 chars) than "basic" did -
+            # 1200 chars used to cover most of a basic result but would now
+            # cut advanced results off mid-price-table.
+            content = (r.get("content") or "")[:3000]
             chunks.append(f"[{r.get('title', '')}]: {content}")
             sources.append({"title": r.get("title", "Web result"), "url": r.get("url", "")})
 
